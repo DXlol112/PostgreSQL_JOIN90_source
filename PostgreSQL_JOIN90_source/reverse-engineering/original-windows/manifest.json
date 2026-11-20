@@ -1,0 +1,25 @@
+{
+  "input_filename": "PostgreSQL_JOIN90.exe",
+  "input_bytes": 7944704,
+  "input_sha256": "e45c4379c4d58bfdb94256bb7f4c41f579ebae2c7704e0dd522a1c5a0c45d909",
+  "generated_at_utc": "2026-11-20T09:23:14.705693+00:00",
+  "tool": "Ghidra 12.2 headless decompiler",
+  "language": "x86:LE:64:default:golang / Windows PE x64",
+  "symbol_source": "Original Go pclntab, parsed by Go debug/gosym",
+  "original_go_source_available": false,
+  "all_go_functions": 7770,
+  "application_functions_expected": 66,
+  "application_functions_exported": 66,
+  "application_functions_decompiled": 66,
+  "application_functions_failed": 0,
+  "scope": "All compiled main.* application functions. Standard-library implementations are indexed, not decompiled.",
+  "result": "Generated C-like pseudocode and x86-64 assembly; not a compilable original Go project.",
+  "go_compiler_version": "go1.27.4",
+  "go_rtti_recovered": false,
+  "go_metadata_limitations": [
+    "Ghidra 12.2 reported untested Go version 1.27.4; automatic RTTI/type and Go-string recovery were unavailable.",
+    "Function names, boundaries and source-line metadata were recovered separately using Go debug/gosym.",
+    "The go:buildid metadata entry is data and was not imported as an executable function."
+  ],
+  "analysis_timeout_observed": false
+}

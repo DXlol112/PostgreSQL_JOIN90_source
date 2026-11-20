@@ -1,0 +1,16 @@
+{
+  "name": "postgresql-join90",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Восстановленная Linux-версия учебного тренажёра PostgreSQL JOIN90",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "setup": "npm --prefix runtime ci --ignore-scripts --no-audit --no-fund",
+    "start": "node app/server.mjs",
+    "test": "node scripts/test.mjs",
+    "build:linux": "bash scripts/build-linux.sh"
+  }
+}

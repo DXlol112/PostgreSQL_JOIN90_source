@@ -1,0 +1,4 @@
+.analysis/
+*.gpr
+*.rep/
+*.lock

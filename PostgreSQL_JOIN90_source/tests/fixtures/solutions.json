@@ -1,0 +1,13 @@
+{
+  "1.1": "4",
+  "1.2": "SELECT s.name AS student_name, g.title AS group_name FROM students AS s JOIN study_groups AS g ON s.group_id = g.id ORDER BY s.id;",
+  "2.1": "SELECT s.name AS student_name, e.course_id, e.status FROM students AS s JOIN enrollments AS e ON e.student_id = s.id ORDER BY s.id, e.id;",
+  "2.2": "SELECT s.name AS student_name, c.title AS course_name FROM students AS s JOIN enrollments AS e ON e.student_id = s.id JOIN courses AS c ON e.course_id = c.id WHERE e.status = 'active' AND c.title = 'PostgreSQL' ORDER BY s.id, e.id;",
+  "3.1": "SELECT s.id AS student_id, s.name AS student_name, g.title AS group_name FROM students AS s LEFT JOIN study_groups AS g ON s.group_id = g.id ORDER BY s.id;",
+  "3.2": "SELECT g.id AS group_id, g.title AS group_name FROM study_groups AS g LEFT JOIN students AS s ON s.group_id = g.id WHERE s.id IS NULL ORDER BY g.id;",
+  "3.3": "SELECT g.id AS group_id, g.title AS group_name, s.name AS student_name FROM students AS s RIGHT JOIN study_groups AS g ON s.group_id = g.id ORDER BY g.id, s.id NULLS LAST;",
+  "4.1": "SELECT g.id AS group_id, g.title AS group_name, s.id AS student_id, s.name AS student_name FROM study_groups AS g FULL JOIN students AS s ON s.group_id = g.id ORDER BY g.id NULLS LAST, s.id NULLS LAST;",
+  "4.2": "12",
+  "5.1": "SELECT s.id AS student_id, s.name AS student_name, e.course_id FROM students AS s LEFT JOIN enrollments AS e ON e.student_id = s.id AND e.status = 'active' ORDER BY s.id, e.course_id NULLS LAST;",
+  "5.2": "SELECT s.id AS student_id, s.name AS student_name, COUNT(e.id) AS active_count FROM students AS s LEFT JOIN enrollments AS e ON e.student_id = s.id AND e.status = 'active' GROUP BY s.id, s.name ORDER BY s.id;"
+}
