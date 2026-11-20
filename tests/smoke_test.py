@@ -25,7 +25,7 @@ def expect(condition, message):
 def start():
     global proc, url, token
     output = log.open('wb')
-    proc = subprocess.Popen([options.node, str(app/'app/server.mjs'), '-no-open', '-data-dir', str(data)], stdout=output, stderr=output)
+    proc = subprocess.Popen([options.node, str(app/'src/app/server.mjs'), '-no-open', '-data-dir', str(data)], stdout=output, stderr=output)
     output.close()
     for _ in range(150):
         text = log.read_text(encoding='utf-8', errors='replace')
