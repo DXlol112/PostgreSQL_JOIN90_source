@@ -56,7 +56,7 @@ cd PostgreSQL_JOIN90_Linux_x64
 Сборка только запускателя:
 
 ```bash
-cd launcher
+cd src/launcher
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
   -ldflags='-s -w -buildid=' -o ../PostgreSQL_JOIN90 .
 ```
@@ -85,13 +85,13 @@ python3 tests/smoke_test.py --node /путь/к/node
 ## Структура
 
 ```text
-app/server.mjs             Локальный HTTP-сервер, работы и экспорт ZIP
-web/                      Интерфейс и редактор
-content/pg_join.json       Задания, теория и эталонные результаты
-content/pg_fixtures.json   Наборы данных для проверки SQL
-runtime/engine.mjs        SQL-движок на PGlite
-runtime/package*.json     Зафиксированная зависимость PGlite 0.5.17
-launcher/                 Исходники нативного Linux-запускателя
+src/app/server.mjs         Локальный HTTP-сервер, работы и экспорт ZIP
+src/web/                  Интерфейс и редактор
+src/content/pg_join.json   Задания, теория и эталонные результаты
+src/content/pg_fixtures.json Наборы данных для проверки SQL
+src/runtime/engine.mjs    SQL-движок на PGlite
+src/runtime/package*.json Зафиксированная зависимость PGlite 0.5.17
+src/launcher/             Исходники нативного Linux-запускателя
 scripts/                  Сборка и запуск тестов
 tests/                    Интеграционные проверки и тестовые решения
 training_database.sql     Учебная база для внешнего PostgreSQL
@@ -107,5 +107,5 @@ THIRD_PARTY.md            Происхождение компонентов
 добавлен результат Ghidra 12.2: C-подобный псевдокод всех 66 функций
 приложения, дизассемблирование, таблица метаданных Go и скрипты повторения
 анализа. Это материал для изучения оригинального Go-сервера; рабочая
-восстановленная Linux-версия запускается из `app/server.mjs`.
+восстановленная Linux-версия запускается из `src/app/server.mjs`.
 Ограничения восстановления типов Go 1.27.4 описаны в README этого раздела.

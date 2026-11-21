@@ -8,8 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "setup": "npm --prefix runtime ci --ignore-scripts --no-audit --no-fund",
-    "start": "node app/server.mjs",
+    "setup": "npm --prefix src/runtime ci --ignore-scripts --no-audit --no-fund",
+    "start": "node src/app/server.mjs",
     "test": "node scripts/test.mjs",
     "build:linux": "bash scripts/build-linux.sh"
   }

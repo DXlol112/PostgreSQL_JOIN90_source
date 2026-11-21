@@ -20,7 +20,7 @@ BUILD_DIR=$(mktemp -d "$PROJECT_DIR/build/linux-x64.XXXXXX")
 STAGE_DIR="$BUILD_DIR/$PACKAGE_NAME"
 mkdir -p "$STAGE_DIR/runtime"
 
-npm --prefix "$PROJECT_DIR/runtime" ci --ignore-scripts --no-audit --no-fund
+npm --prefix "$PROJECT_DIR/src/runtime" ci --ignore-scripts --no-audit --no-fund
 
 ARCHIVE_PATH="$PROJECT_DIR/.cache/$NODE_ARCHIVE"
 if [[ ! -f "$ARCHIVE_PATH" ]]; then
@@ -34,13 +34,13 @@ tar -xzf "$ARCHIVE_PATH" -C "$BUILD_DIR" \
   "node-v${NODE_VERSION}-linux-x64/bin/node" \
   "node-v${NODE_VERSION}-linux-x64/LICENSE"
 
-for directory in app web content launcher; do
-  cp -R -- "$PROJECT_DIR/$directory" "$STAGE_DIR/$directory"
+for directory in app web content; do
+  cp -R -- "$PROJECT_DIR/src/$directory" "$STAGE_DIR/$directory"
 done
-cp -- "$PROJECT_DIR/runtime/engine.mjs" "$STAGE_DIR/runtime/"
-cp -- "$PROJECT_DIR/runtime/package.json" "$STAGE_DIR/runtime/"
-cp -- "$PROJECT_DIR/runtime/package-lock.json" "$STAGE_DIR/runtime/"
-cp -R -- "$PROJECT_DIR/runtime/node_modules" "$STAGE_DIR/runtime/"
+cp -- "$PROJECT_DIR/src/runtime/engine.mjs" "$STAGE_DIR/runtime/"
+cp -- "$PROJECT_DIR/src/runtime/package.json" "$STAGE_DIR/runtime/"
+cp -- "$PROJECT_DIR/src/runtime/package-lock.json" "$STAGE_DIR/runtime/"
+cp -R -- "$PROJECT_DIR/src/runtime/node_modules" "$STAGE_DIR/runtime/"
 cp -- "$BUILD_DIR/node-v${NODE_VERSION}-linux-x64/bin/node" "$STAGE_DIR/runtime/node"
 cp -- "$BUILD_DIR/node-v${NODE_VERSION}-linux-x64/LICENSE" "$STAGE_DIR/runtime/NODE_LICENSE.txt"
 for filename in README.md THIRD_PARTY.md training_database.sql start.sh; do
@@ -48,7 +48,7 @@ for filename in README.md THIRD_PARTY.md training_database.sql start.sh; do
 done
 
 (
-  cd -- "$PROJECT_DIR/launcher"
+  cd -- "$PROJECT_DIR/src/launcher"
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOAMD64=v1 GOTOOLCHAIN=local \
     go build -trimpath -ldflags='-s -w -buildid=' \
     -o "$STAGE_DIR/PostgreSQL_JOIN90" .
