@@ -18,6 +18,8 @@
 - [pseudocode/comparison.c](pseudocode/comparison.c): сравнение ответов.
 - [pseudocode/platform_windows.c](pseudocode/platform_windows.c): Windows API.
 - [pseudocode/pg_course.c](pseudocode/pg_course.c): инициализация курса.
+- [Карта API оригинала](../../docs/ORIGINAL-API.md): HTTP-маршруты,
+  проверки доступа и побочные эффекты.
 - [assembly/](assembly/): машинные инструкции с адресами и исходными байтами.
 - [decompilation-results.tsv](decompilation-results.tsv): статус каждой функции.
 - [symbols/go-functions.json](symbols/go-functions.json): имена, адреса,
