@@ -6,6 +6,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { deflateRawSync } from 'node:zlib';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -222,7 +223,6 @@ async function runSQL(code) {
   return { compilation: '', run: { exit: error ? 1 : 0, stdout: c && !c.error ? formatTable(c.actual) : '', stderr: error, canceled: execution.canceled, timedOut: execution.timedOut, truncated: execution.truncated, durationMs: execution.durationMs } };
 }
 
-// Minimal standards-compliant ZIP writer. Files are UTF-8, stored without compression.
 const crcTable = Array.from({ length: 256 }, (_, n) => {
   let c = n;
   for (let k = 0; k < 8; k++) c = (c & 1) ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
@@ -231,45 +231,102 @@ const crcTable = Array.from({ length: 256 }, (_, n) => {
 function zip(files) {
   const local = [], central = [];
   let offset = 0;
-  const date = new Date();
-  const dosTime = date.getHours() << 11 | date.getMinutes() << 5 | date.getSeconds() >> 1;
-  const dosDate = (date.getFullYear() - 1980) << 9 | (date.getMonth() + 1) << 5 | date.getDate();
   for (const [filename, value] of files) {
     const name = Buffer.from(filename), body = Buffer.from(value);
+    const compressed = deflateRawSync(body);
     let crc = 0xffffffff;
     for (const b of body) crc = crcTable[(crc ^ b) & 255] ^ (crc >>> 8);
     crc = (crc ^ 0xffffffff) >>> 0;
-    const h = Buffer.alloc(30);
-    h.writeUInt32LE(0x04034b50); h.writeUInt16LE(20, 4); h.writeUInt16LE(0x800, 6);
-    h.writeUInt16LE(dosTime, 10); h.writeUInt16LE(dosDate, 12); h.writeUInt32LE(crc, 14);
-    h.writeUInt32LE(body.length, 18); h.writeUInt32LE(body.length, 22); h.writeUInt16LE(name.length, 26);
-    local.push(h, name, body);
-    const c = Buffer.alloc(46);
-    c.writeUInt32LE(0x02014b50); c.writeUInt16LE(20, 4); h.copy(c, 6, 4, 30);
-    c.writeUInt32LE(offset, 42);
-    central.push(c, name);
-    offset += h.length + name.length + body.length;
+
+    // The Windows exporter uses DEFLATE, data descriptors and zero ZIP timestamps.
+    const flags = /[^\x00-\x7f]/.test(filename) ? 0x808 : 0x08;
+    const header = Buffer.alloc(30);
+    header.writeUInt32LE(0x04034b50);
+    header.writeUInt16LE(20, 4);
+    header.writeUInt16LE(flags, 6);
+    header.writeUInt16LE(8, 8);
+    header.writeUInt16LE(name.length, 26);
+
+    const descriptor = Buffer.alloc(16);
+    descriptor.writeUInt32LE(0x08074b50);
+    descriptor.writeUInt32LE(crc, 4);
+    descriptor.writeUInt32LE(compressed.length, 8);
+    descriptor.writeUInt32LE(body.length, 12);
+    local.push(header, name, compressed, descriptor);
+
+    const entry = Buffer.alloc(46);
+    entry.writeUInt32LE(0x02014b50);
+    entry.writeUInt16LE(20, 4);
+    header.copy(entry, 6, 4, 30);
+    descriptor.copy(entry, 16, 4);
+    entry.writeUInt32LE(offset, 42);
+    central.push(entry, name);
+    offset += header.length + name.length + compressed.length + descriptor.length;
   }
   const cd = Buffer.concat(central), end = Buffer.alloc(22);
   end.writeUInt32LE(0x06054b50); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10);
   end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(offset, 16);
   return Buffer.concat([...local, cd, end]);
 }
+const exportStatuses = new Map([
+  ['passed', 'Пройдено'], ['failed', 'Есть ошибки'], ['review', 'На разборе преподавателя'],
+  ['canceled', 'Проверка остановлена']
+]);
+function csvRow(fields) {
+  return fields.map(value => {
+    const text = String(value);
+    return /[;"\r\n]|^\s/.test(text) || text === '\\.' ? `"${text.replaceAll('"', '""')}"` : text;
+  }).join(';');
+}
 function exportWork(student) {
-  const work = loadWork(student), files = [];
-  const report = { student: work.student, group: work.group, version: work.version, exportedAt: now(), tasks: [], autoPoints: 0, autoMaximum: 0, manualMaximum: 0 };
+  const work = loadWork(student);
+  const exportedAt = new Date();
+  const dateTime = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
+    .format(exportedAt).replace(', ', ' ');
+  const report = [
+    `# ${course.title} — ${work.version}`, '',
+    `Студент: ${work.student}`, `Группа: ${work.group}`, `Экспорт: ${dateTime}`, '',
+    '| Задание | Статус | Автобаллы |', '| --- | --- | --- |'
+  ];
+  const summary = ['\uFEFFЗадание;Название;Статус;Автобаллы;Проверено'];
+  const files = [];
+  const tasks = {};
+  const analysis = [];
+  let autoPoints = 0, autoMaximum = 0, manualMaximum = 0;
   for (const task of course.tasks) {
-    const w = work.tasks[task.id];
-    if (task.kind === 'analysis') report.manualMaximum += task.points;
-    else { report.autoMaximum += task.points; if (w.result?.status === 'passed') report.autoPoints += task.points; }
-    report.tasks.push({ id: task.id, title: task.title, kind: task.kind, points: task.points, result: w.result || null });
-    const folder = 'tasks/' + task.id + '/';
-    files.push([folder + (task.kind === 'text' ? 'answer.txt' : 'answer.sql'), w.code || '']);
-    if (task.kind === 'analysis') files.push([folder + 'analysis_answers.md', task.questions.map((q, i) => `## ${q}\n\n${w.answers?.[i] || ''}\n`).join('\n')]);
+    const { code = '', answers, result, updatedAt } = work.tasks[task.id];
+    const codeHash = hash(code);
+    // Older port saves hashed the written answers. Export those reviews in the original schema.
+    const legacyReview = task.kind === 'analysis' && result?.status === 'review' && answers?.length &&
+      result.codeHash === hash(JSON.stringify(answers));
+    const exportedResult = legacyReview ? { ...result, codeHash } : result;
+    const validResult = exportedResult?.codeHash === codeHash ? exportedResult : null;
+    const status = exportStatuses.get(validResult?.status) || 'Не проверено';
+    const points = validResult?.status === 'passed' ? task.points : 0;
+    const checkedAt = (validResult?.checkedAt || '').replace(/\.\d+(?=Z$|[+-]\d{2}:\d{2}$)/, '');
+
+    report.push(`| ${task.id} ${task.title} | ${status} | ${points} |`);
+    summary.push(csvRow([task.id, task.title, status, points, checkedAt]));
+    autoPoints += points;
+    if (task.kind === 'analysis') {
+      manualMaximum += task.points;
+      for (const [i, question] of task.questions.entries()) {
+        analysis.push(`## ${i + 1} ${question}\n\n${answers?.[i] || ''}\n\n`);
+      }
+    } else autoMaximum += task.points;
+
+    const folder = 'task_' + task.id.replace(/[^\p{L}\p{N}_-]/gu, '_');
+    files.push([`${folder}/answer.sql`, code]);
+    tasks[task.id] = { code, answers: answers?.length ? answers : undefined, result: exportedResult ?? undefined, updatedAt };
   }
-  files.push(['workspace.json', JSON.stringify(work, null, 2)]);
-  files.push(['report.json', JSON.stringify(report, null, 2)]);
-  files.push(['report.md', `# ${course.title}\n\nУченик: ${work.student}\n\nАвтобаллы: ${report.autoPoints}/${report.autoMaximum}\n\nРучная проверка: до ${report.manualMaximum} баллов\n\n` + report.tasks.map(t => `- ${t.id} ${t.title}: ${t.result?.status || 'не проверено'}`).join('\n') + '\n']);
+  report.push('', `Автоматическая часть: ${autoPoints} из ${autoMaximum}. Ручная проверка: до ${manualMaximum}. Общий максимум — ${autoMaximum + manualMaximum}.`, '',
+    'После изменения ответа результат проверки считается неактуальным. Указанные статусы относятся к экспортированным работам.', '');
+  const workspace = { student: work.student, group: work.group, version: work.version, startedAt: work.startedAt, updatedAt: work.updatedAt, tasks };
+  const workspaceJson = JSON.stringify(workspace, null, 2)
+    .replace(/[<>&\u2028\u2029]/g, char => '\\u' + char.charCodeAt(0).toString(16).padStart(4, '0'));
+  files.unshift(['workspace.json', workspaceJson]);
+  files.push(['report.md', report.join('\n')], ['summary.csv', summary.join('\n') + '\n']);
+  if (analysis.length) files.push(['analysis_answers.md', analysis.join('')]);
   return zip(files);
 }
 function json(res, value, status = 200) {
@@ -338,7 +395,7 @@ const server = http.createServer(async (req, res) => {
       case '/api/cancel': cancelRun(); json(res, { ok: true }); break;
       case '/api/export': {
         const archive = exportWork(url.searchParams.get('student'));
-        res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="PostgreSQL_JOIN90_work.zip"', 'Content-Length': archive.length, 'Cache-Control': 'no-store' });
+        res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="Universal_Trainer_Work.zip"', 'Content-Length': archive.length, 'Cache-Control': 'no-store' });
         res.end(archive); break;
       }
       case '/api/open-folder': {
