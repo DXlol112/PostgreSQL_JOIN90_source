@@ -1,6 +1,6 @@
 from pathlib import Path
 import argparse, tempfile
-import subprocess, time, re, urllib.request, urllib.error, urllib.parse, json, zipfile, io, concurrent.futures, shutil
+import subprocess, time, re, urllib.request, urllib.error, urllib.parse, json, zipfile, io, csv, hashlib, concurrent.futures, shutil
 
 parser = argparse.ArgumentParser(description='PostgreSQL JOIN90 integration tests')
 parser.add_argument('--node', default=shutil.which('node'), help='Node.js executable')
@@ -100,13 +100,28 @@ try:
     expect(status==200 and result['run']['exit']==0 and '\n6\n' in result['run']['stdout'],'interactive SQL run uses a fresh database')
     status,result=request('/api/analysis',{'student':student,'taskId':'6.1','answers':['Сохраняется строка левой таблицы.\nВ столбцах правой таблицы будет NULL.','WHERE удаляет строки с NULL.\nУсловие следует перенести в ON.','COUNT(e.id) учитывает только найденные записи.\nГруппировка по id различает студентов с одинаковыми именами.']})
     expect(status==200 and result['status']=='review','written answers saved for teacher review')
-    status,archive=request('/api/export?student='+urllib.parse.quote(student),raw=True)
+    export_path='/api/export?student='+urllib.parse.quote(student)
+    status,archive=request(export_path,raw=True)
     with zipfile.ZipFile(io.BytesIO(archive)) as z:
         expect(status==200 and z.testzip() is None,'export is a valid ZIP with correct CRCs')
-        report=json.loads(z.read('report.json'))
-        expect(report['autoPoints']==report['autoMaximum']==37 and report['manualMaximum']==4,'export retains grading and all 37 automatic points')
-        expect(len([n for n in z.namelist() if n.startswith('tasks/')])==13,'export includes every task and written explanations')
-        expect(json.loads(z.read('workspace.json'))['student']==student,'Unicode student name survives ZIP export')
+        task_paths={t['id']:f"task_{t['id'].replace('.', '_')}/answer.sql" for t in cat['tasks']}
+        expect(z.namelist()==['workspace.json',*task_paths.values(),'report.md','summary.csv','analysis_answers.md'],'ZIP entry names and order match the original exporter')
+        expect(all(e.compress_type==zipfile.ZIP_DEFLATED and e.flag_bits==8 and not e.extra for e in z.infolist()),'ZIP entries use DEFLATE and data descriptors')
+        workspace=json.loads(z.read('workspace.json'))
+        expect(workspace['student']==student,'Unicode student name survives ZIP export')
+        expect(all(z.read(filename).decode('utf-8')==workspace['tasks'][task_id]['code'] for task_id, filename in task_paths.items()),'all answer files preserve the saved text')
+        report=z.read('report.md').decode('utf-8')
+        expect('Автоматическая часть: 37 из 37. Ручная проверка: до 4. Общий максимум — 41.' in report,'export retains grading and all 37 automatic points')
+        summary=z.read('summary.csv')
+        rows=list(csv.reader(io.StringIO(summary.decode('utf-8-sig')),delimiter=';'))
+        expect(summary.startswith(b'\xef\xbb\xbf') and rows[0]==['Задание','Название','Статус','Автобаллы','Проверено'] and len(rows)==13,'summary uses the original CSV header, delimiter and BOM')
+        expect(rows[-1][2:4]==['На разборе преподавателя','0'] and sum(int(row[3]) for row in rows[1:])==37,'summary includes review status and automatic points')
+        questions=cat['tasks'][-1]['questions']
+        analysis=workspace['tasks']['6.1']
+        answers=analysis['answers']
+        expected=''.join(f'## {i} {question}\n\n{answer}\n\n' for i,(question,answer) in enumerate(zip(questions,answers),1))
+        expect(z.read('analysis_answers.md').decode('utf-8')==expected,'written answers use the original numbered Markdown sections')
+        expect(analysis['result']['codeHash']==hashlib.sha256(analysis['code'].encode()).hexdigest(),'exported reviews match the original result hash format')
     status,_=request('/api/shutdown',{})
     proc.wait(timeout=5)
     expect(status==200 and proc.returncode==0,'clean shutdown')
